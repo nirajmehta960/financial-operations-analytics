@@ -1,0 +1,44 @@
+# Data - datasets should not be committed (keep folders via .gitkeep)
+data/raw/*
+!data/raw/.gitkeep
+data/preprocessed/*
+!data/preprocessed/.gitkeep
+data/featured/*
+!data/featured/.gitkeep
+
+# General data extensions
+*.csv
+*.parquet
+*.pkl
+*.xlsx
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Model artifacts
+model/*.pkl
+!model/.gitkeep
+
+# Images (optional - can track or not)
+# images/
