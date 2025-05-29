@@ -1,12 +1,12 @@
 """Tests for feature_engineering module."""
-import os
+from pathlib import Path
 import sys
 import pandas as pd
-import numpy as np
 import pytest
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT)
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
 from src.feature_engineering import (
     add_discount_bands,
@@ -15,12 +15,11 @@ from src.feature_engineering import (
     add_shipping_days,
     build_order_level,
     build_model_ready,
-    DISCOUNT_BAND_LABELS,
     CHURN_RECENCY_DAYS,
 )
 
 
-# --- Discount bands ---
+# Discount band tests
 
 
 def test_add_discount_bands():
@@ -64,14 +63,14 @@ def test_discount_band_metrics_loss_pct():
         "Profit": [10.0, 20.0, -5.0, -5.0],
     })
     out = discount_band_metrics(df)
-    # No discount: 0% loss; Extreme: 100% loss
+    # No discount should have 0% loss; extreme should have 100% loss.
     no_disc = out[out["discount_band"].astype(str) == "No Discount"].iloc[0]
     assert no_disc["loss_pct"] == 0.0
     extreme = out[out["discount_band"].astype(str) == "Extreme (31%+)"].iloc[0]
     assert extreme["loss_pct"] == 100.0
 
 
-# --- Transaction features ---
+# Transaction-level feature tests
 
 
 def test_add_transaction_features():
@@ -94,7 +93,7 @@ def test_add_shipping_days():
     assert list(out["shipping_days"]) == [2, 4]
 
 
-# --- Order-level aggregation ---
+# Order-level aggregation tests
 
 
 @pytest.fixture
@@ -112,7 +111,7 @@ def sample_transactions():
 
 def test_build_order_level_shape(sample_transactions):
     out = build_order_level(sample_transactions)
-    assert len(out) == 2  # 2 unique orders
+    assert len(out) == 2  # Two unique orders.
     assert "order_total_sales" in out.columns
     assert "order_total_profit" in out.columns
     assert "order_items_count" in out.columns
@@ -129,7 +128,7 @@ def test_build_order_level_aggregation(sample_transactions):
     assert o1["order_avg_discount"] == 0.05
 
 
-# --- Model-ready (no leakage) ---
+# Model-ready dataset tests (no target leakage)
 
 
 @pytest.fixture
@@ -177,9 +176,9 @@ def test_build_model_ready_no_target_in_features(sample_customers):
 
 def test_build_model_ready_segment_encoded(sample_customers):
     out = build_model_ready(sample_customers)
-    # Segment is one-hot encoded (e.g. Segment_Corporate, Segment_Home Office), so raw "Segment" is gone
+    # Segment should be one-hot encoded, so raw "Segment" must be absent.
     assert "Segment" not in out.columns
-    # Should have at least one Segment_* dummy
+    # At least one Segment_* dummy column should exist.
     segment_dummies = [c for c in out.columns if c.startswith("Segment_")]
     assert len(segment_dummies) >= 1
 

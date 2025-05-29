@@ -42,3 +42,6 @@ model/*.pkl
 
 # Images (optional - can track or not)
 # images/
+
+# Matplotlib cache
+.matplotlib/

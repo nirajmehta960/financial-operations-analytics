@@ -1,12 +1,13 @@
 """Tests for modeling module (churn prediction)."""
-import os
+from pathlib import Path
 import sys
 import pandas as pd
 import numpy as np
 import pytest
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT)
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
 from src.modeling import (
     prepare_train_test,

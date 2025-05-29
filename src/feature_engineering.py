@@ -3,20 +3,21 @@ Feature engineering for U.S. Superstore: order-level and customer-level features
 Phase 3: build order aggregates, customer-level table, model-ready dataset for churn prediction.
 """
 
-import os
+from pathlib import Path
 import pandas as pd
 import numpy as np
 
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DEFAULT_PREPROCESSED_PATH = os.path.join(_PROJECT_ROOT, "data", "preprocessed", "superstore_preprocessed.csv")
-DEFAULT_ORDERS_PATH = os.path.join(_PROJECT_ROOT, "data", "featured", "superstore_orders.csv")
-DEFAULT_CUSTOMERS_PATH = os.path.join(_PROJECT_ROOT, "data", "featured", "superstore_customers.csv")
-DEFAULT_MODEL_READY_PATH = os.path.join(_PROJECT_ROOT, "data", "featured", "model_ready.csv")
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_PREPROCESSED_PATH = _PROJECT_ROOT / "data" / "preprocessed" / "superstore_preprocessed.csv"
+DEFAULT_ORDERS_PATH = _PROJECT_ROOT / "data" / "featured" / "superstore_orders.csv"
+DEFAULT_CUSTOMERS_PATH = _PROJECT_ROOT / "data" / "featured" / "superstore_customers.csv"
+DEFAULT_MODEL_READY_PATH = _PROJECT_ROOT / "data" / "featured" / "model_ready.csv"
 
-# Churn = no purchase in last 365 days (per BRD)
+# Churn rule: customer is churned if no purchase in last 365 days.
 CHURN_RECENCY_DAYS = 365
 
-# Discount bands per PRD Section 4
+# Discount bands for discount analysis.
+# Note: -0.001 is a small lower bound so 0 discount is safely included in the first bin.
 DISCOUNT_BAND_BINS = [-0.001, 0, 0.10, 0.20, 0.30, 1.0]
 DISCOUNT_BAND_LABELS = [
     "No Discount",
@@ -28,7 +29,7 @@ DISCOUNT_BAND_LABELS = [
 
 
 def add_discount_bands(df: pd.DataFrame, col: str = "Discount") -> pd.DataFrame:
-    """Create discount bands per PRD Section 4 (Discount Analysis Framework)."""
+    """Add a categorical discount band column from a numeric discount column."""
     df = df.copy()
     if col not in df.columns:
         return df
@@ -40,15 +41,22 @@ def add_discount_bands(df: pd.DataFrame, col: str = "Discount") -> pd.DataFrame:
 
 def discount_band_metrics(df: pd.DataFrame, discount_col: str = "Discount") -> pd.DataFrame:
     """
-    Per-band metrics: tx count, total_sales, total_profit, avg_profit, loss_pct, margin_pct.
-    Input: transaction-level DataFrame with Discount and Profit (and Sales for margin).
+    Summarize performance by discount band.
+
+    Metrics returned per band:
+    - tx_count: number of transactions
+    - total_sales: total sales (if Sales exists)
+    - total_profit: total profit
+    - avg_profit: average profit
+    - loss_pct: percentage of rows where Profit < 0
+    - margin_pct: total_profit / total_sales * 100 (if Sales exists)
     """
     df = add_discount_bands(df, col=discount_col)
     agg_dict = {
         "tx_count": ("Profit", "count"),
         "total_profit": ("Profit", "sum"),
         "avg_profit": ("Profit", "mean"),
-        "loss_pct": ("Profit", lambda x: 100.0 * (x < 0).sum() / len(x)),
+        "loss_pct": ("Profit", lambda x: 100.0 * (x < 0).sum() / len(x) if len(x) > 0 else 0.0),
     }
     if "Sales" in df.columns:
         agg_dict["total_sales"] = ("Sales", "sum")
@@ -63,7 +71,7 @@ def discount_band_metrics(df: pd.DataFrame, discount_col: str = "Discount") -> p
 
 
 def add_transaction_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Add profit_margin and is_profitable at transaction level."""
+    """Add row-level profitability features: profit_margin (%) and is_profitable (0/1)."""
     if "Sales" in df.columns and "Profit" in df.columns:
         df = df.copy()
         df["profit_margin"] = np.where(df["Sales"] > 0, df["Profit"] / df["Sales"] * 100, np.nan)
@@ -72,7 +80,7 @@ def add_transaction_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def add_shipping_days(df: pd.DataFrame) -> pd.DataFrame:
-    """Shipping days = Ship Date - Order Date (days)."""
+    """Add shipping_days as Ship Date minus Order Date in days."""
     if "Ship Date" in df.columns and "Order Date" in df.columns:
         df = df.copy()
         df["shipping_days"] = (df["Ship Date"] - df["Order Date"]).dt.days
@@ -81,8 +89,25 @@ def add_shipping_days(df: pd.DataFrame) -> pd.DataFrame:
 
 def build_order_level(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Aggregate to order level: order_total_sales, order_total_profit, order_items_count,
-    order_avg_discount, shipping_days (avg), order_month, order_quarter, order_year.
+    Convert transaction-level rows into one row per Order ID.
+
+    Creates order-level features such as totals, averages, item count, and time fields.
+
+    Output columns created here:
+    - Order ID
+    - order_total_sales
+    - order_total_profit
+    - order_avg_discount
+    - avg_shipping_days
+    - order_items_count
+    - order_date
+    - order_month
+    - order_quarter
+    - order_year
+    - order_profit_margin
+
+    Note: Customer/location columns are attached later by
+    attach_customer_and_region_to_orders().
     """
     df = add_transaction_features(df)
     df = add_shipping_days(df)
@@ -102,7 +127,7 @@ def build_order_level(df: pd.DataFrame) -> pd.DataFrame:
     })
     order_agg["order_items_count"] = df.groupby("Order ID").size()
 
-    # Order date from first row per order
+    # Use first Order Date as the order's reference date.
     order_dates = df.groupby("Order ID")["Order Date"].first()
     order_agg["order_date"] = order_dates
     order_agg["order_month"] = order_dates.dt.to_period("M").astype(str)
@@ -120,7 +145,7 @@ def build_order_level(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def attach_customer_and_region_to_orders(df: pd.DataFrame, orders: pd.DataFrame) -> pd.DataFrame:
-    """Attach Customer ID, Segment, Region, State, Ship Mode (from first row per Order ID) to order-level table."""
+    """Attach customer and location fields to the order-level table using Order ID."""
     first = df.groupby("Order ID").first().reset_index()
     cols = ["Order ID", "Customer ID", "Segment", "Region", "State", "Ship Mode"]
     cols = [c for c in cols if c in first.columns]
@@ -131,10 +156,29 @@ def attach_customer_and_region_to_orders(df: pd.DataFrame, orders: pd.DataFrame)
 
 def build_customer_level(orders: pd.DataFrame, reference_date: pd.Timestamp = None) -> pd.DataFrame:
     """
-    Customer-level features for churn: first_order_date, last_order_date, order_count,
-    total_spent, total_profit, avg_order_value, avg_profit_margin, avg_discount,
-    unique_categories, unique_subcategories, preferred_segment, preferred_ship_mode,
-    tenure_days, recency_days, avg_shipping_days, is_churned.
+    Build one row per customer with spending, behavior, and churn features.
+
+    If reference_date is None, uses the latest order_date in the dataset.
+
+    Output columns created here:
+    - Customer ID
+    - first_order_date
+    - last_order_date
+    - order_count
+    - total_spent
+    - total_profit
+    - avg_discount
+    - avg_shipping_days
+    - avg_order_value
+    - avg_profit_margin
+    - tenure_days
+    - recency_days
+    - is_churned
+    - Segment
+    - preferred_ship_mode
+
+    Note: unique_categories and unique_subcategories are added later by
+    add_customer_category_breadth().
     """
     if reference_date is None:
         reference_date = orders["order_date"].max()
@@ -159,12 +203,12 @@ def build_customer_level(orders: pd.DataFrame, reference_date: pd.Timestamp = No
     customers["recency_days"] = (reference_date - customers["last_order_date"]).dt.days
     customers["is_churned"] = (customers["recency_days"] > CHURN_RECENCY_DAYS).astype(int)
 
-    # Segment: take mode per customer from orders
+    # Segment per customer = most frequent Segment value (mode).
     seg = orders.groupby("Customer ID")["Segment"].agg(lambda x: x.mode().iloc[0] if len(x) else None).reset_index()
     seg.columns = ["Customer ID", "Segment"]
     customers = customers.merge(seg, on="Customer ID", how="left")
 
-    # Preferred ship mode: mode per customer (PRD 2.4)
+    # Preferred ship mode per customer = most frequent Ship Mode (mode).
     if "Ship Mode" in orders.columns:
         ship = orders.groupby("Customer ID")["Ship Mode"].agg(
             lambda x: x.mode().iloc[0] if len(x) else None
@@ -176,7 +220,7 @@ def build_customer_level(orders: pd.DataFrame, reference_date: pd.Timestamp = No
 
 
 def add_customer_category_breadth(df_raw: pd.DataFrame, customers: pd.DataFrame) -> pd.DataFrame:
-    """Add unique_categories and unique_subcategories per customer from raw transaction data."""
+    """Add category breadth features: unique category and sub-category counts per customer."""
     n_cats = df_raw.groupby("Customer ID")["Category"].nunique().reset_index()
     n_cats.columns = ["Customer ID", "unique_categories"]
     n_subs = df_raw.groupby("Customer ID")["Sub-Category"].nunique().reset_index()
@@ -188,8 +232,17 @@ def add_customer_category_breadth(df_raw: pd.DataFrame, customers: pd.DataFrame)
 
 def build_model_ready(customers: pd.DataFrame, target_col: str = "is_churned") -> pd.DataFrame:
     """
-    Prepare model-ready dataset: numeric features only, one-hot encode Segment.
-    Drops date columns, Customer ID, and recency_days (target is derived from it — would leak).
+    Prepare the final model-ready dataset from customer-level features.
+
+    Drops identifiers/date columns and recency_days to avoid target leakage,
+    one-hot encodes categorical columns, fills numeric NaNs, and places target last.
+
+        Output columns in model_ready.csv:
+        - Numeric customer features (for example: order_count, total_spent, total_profit,
+            avg_discount, avg_shipping_days, avg_order_value, avg_profit_margin,
+            tenure_days, unique_categories, unique_subcategories)
+        - One-hot encoded categorical features (for example: Segment_*, preferred_ship_mode_*)
+        - Target column at the end: is_churned
     """
     df = customers.copy()
     # Drop identifiers, dates, and recency_days (directly defines is_churned — data leakage)
@@ -201,7 +254,7 @@ def build_model_ready(customers: pd.DataFrame, target_col: str = "is_churned") -
         if cat_col in df.columns:
             df = pd.get_dummies(df, columns=[cat_col], drop_first=True)
 
-    # Fill NaN in numeric columns (e.g. avg_profit_margin from zero-sales customers)
+    # Fill numeric NaN values (for example, avg_profit_margin when total_spent is 0).
     numeric_cols = df.select_dtypes(include=[np.number]).columns
     if target_col in df.columns:
         numeric_cols = numeric_cols.drop(target_col, errors="ignore")
@@ -222,13 +275,14 @@ def run_feature_engineering_pipeline(
     model_ready_path: str = None,
 ) -> tuple:
     """
-    Load preprocessed data, build order-level and customer-level tables, save model_ready.
-    Returns (orders_df, customers_df, model_ready_df).
+    Run the full feature engineering pipeline and save all output datasets.
+
+    Returns: (orders_df, customers_df, model_ready_df)
     """
-    input_path = input_path or DEFAULT_PREPROCESSED_PATH
-    orders_path = orders_path or DEFAULT_ORDERS_PATH
-    customers_path = customers_path or DEFAULT_CUSTOMERS_PATH
-    model_ready_path = model_ready_path or DEFAULT_MODEL_READY_PATH
+    input_path = Path(input_path) if input_path else DEFAULT_PREPROCESSED_PATH
+    orders_path = Path(orders_path) if orders_path else DEFAULT_ORDERS_PATH
+    customers_path = Path(customers_path) if customers_path else DEFAULT_CUSTOMERS_PATH
+    model_ready_path = Path(model_ready_path) if model_ready_path else DEFAULT_MODEL_READY_PATH
 
     df = pd.read_csv(input_path)
     df["Order Date"] = pd.to_datetime(df["Order Date"], errors="coerce")
@@ -241,7 +295,9 @@ def run_feature_engineering_pipeline(
     customers = build_customer_level(orders, reference_date=reference_date)
     customers = add_customer_category_breadth(df, customers)
 
-    os.makedirs(os.path.dirname(orders_path), exist_ok=True)
+    orders_path.parent.mkdir(parents=True, exist_ok=True)
+    customers_path.parent.mkdir(parents=True, exist_ok=True)
+    model_ready_path.parent.mkdir(parents=True, exist_ok=True)
     orders.to_csv(orders_path, index=False)
     customers.to_csv(customers_path, index=False)
 

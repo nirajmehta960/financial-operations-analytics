@@ -1,8 +1,11 @@
 """
-Plotting helpers for EDA and model evaluation — Financial Operations Analytics.
+Visualization helpers for EDA and model evaluation.
+
+Includes reusable plot functions plus a convenience function to generate
+the full EDA chart set used in this project.
 """
 
-import os
+from pathlib import Path
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
@@ -11,15 +14,16 @@ from sklearn.metrics import RocCurveDisplay, confusion_matrix
 
 
 def save_fig(fig, path: str, dpi: int = 150):
-    """Save figure to path; create parent dirs if needed."""
+    """Save a Matplotlib figure and ensure parent directory exists."""
     if path:
-        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        fig.savefig(path, dpi=dpi, bbox_inches="tight")
+        path_obj = Path(path)
+        path_obj.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(path_obj, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
 
 
 def plot_roc_curves(results_dict, y_test, title: str = "ROC Curves — Churn Models", save_path: str = None):
-    """Plot ROC curves for multiple models."""
+    """Plot ROC curves for multiple models on one axis."""
     fig, ax = plt.subplots(figsize=(8, 6))
     for name, res in results_dict.items():
         RocCurveDisplay.from_predictions(y_test, res["y_proba"], name=name, ax=ax)
@@ -32,7 +36,7 @@ def plot_roc_curves(results_dict, y_test, title: str = "ROC Curves — Churn Mod
 
 
 def plot_confusion_matrices(results_dict, y_test, save_path: str = None):
-    """1x3 confusion matrices for each model."""
+    """Plot side-by-side confusion matrices for all models in results_dict."""
     fig, axes = plt.subplots(1, 3, figsize=(14, 5))
     for ax, (name, res) in zip(axes, results_dict.items()):
         cm = confusion_matrix(y_test, res["y_pred"])
@@ -47,7 +51,7 @@ def plot_confusion_matrices(results_dict, y_test, save_path: str = None):
 
 
 def plot_feature_importance(importance_series: pd.Series, top_n: int = 10, title: str = "Top Churn Predictors", save_path: str = None):
-    """Horizontal bar chart of feature importance."""
+    """Plot horizontal bar chart of top feature importances."""
     top = importance_series.head(top_n)
     fig, ax = plt.subplots(figsize=(8, 6))
     top.plot(kind="barh", ax=ax, color="steelblue")
@@ -61,7 +65,7 @@ def plot_feature_importance(importance_series: pd.Series, top_n: int = 10, title
 
 
 def plot_revenue_profit_trend(monthly: pd.DataFrame, save_path: str = None):
-    """Dual-axis line: Sales and Profit over time (monthly index)."""
+    """Plot dual-axis monthly trend for Sales and Profit."""
     fig, ax1 = plt.subplots(figsize=(10, 5))
     ax1.plot(monthly.index.astype(str), monthly["Sales"], color="C0", label="Sales")
     ax1.set_ylabel("Sales ($)")
@@ -79,7 +83,7 @@ def plot_revenue_profit_trend(monthly: pd.DataFrame, save_path: str = None):
 
 
 def plot_subcategory_pl(subcat: pd.DataFrame, save_path: str = None):
-    """Horizontal bar: Sales vs Profit by sub-category (diverging)."""
+    """Plot sub-category P&L with horizontal Sales and Profit bars."""
     subcat = subcat.sort_values("Profit")
     fig, ax = plt.subplots(figsize=(10, 8))
     y = range(len(subcat))
@@ -97,7 +101,7 @@ def plot_subcategory_pl(subcat: pd.DataFrame, save_path: str = None):
 
 
 def plot_discount_vs_profit(df: pd.DataFrame, save_path: str = None):
-    """Scatter: Discount % vs Profit (sample if large)."""
+    """Scatter plot of Discount (%) versus Profit at transaction level."""
     plot_df = df
     if len(df) > 2000:
         plot_df = df.sample(2000, random_state=42)
@@ -119,8 +123,9 @@ def plot_discount_band_analysis(
     save_path: str = None,
 ):
     """
-    Grouped bar: metric by discount band (PRD Section 4).
-    band_metrics from feature_engineering.discount_band_metrics().
+    Plot a selected metric by discount band.
+
+    Expects band_metrics output from feature_engineering.discount_band_metrics().
     """
     fig, ax = plt.subplots(figsize=(9, 5))
     bands = band_metrics["discount_band"].astype(str)
@@ -145,10 +150,17 @@ def generate_all_eda_charts(
     save_dir: str = "images/eda_charts",
 ):
     """
-    Generate and save all EDA charts to save_dir (e.g. images/eda_charts).
-    Uses preprocessed (transaction-level), orders (order-level), and customers (customer-level) DataFrames.
+    Generate and save the full EDA chart bundle.
+
+    Inputs:
+    - preprocessed_df: transaction-level data
+    - orders_df: order-level data
+    - customers_df: customer-level data
+
+    Output files are saved under save_dir.
     """
-    os.makedirs(save_dir, exist_ok=True)
+    save_dir = Path(save_dir)
+    save_dir.mkdir(parents=True, exist_ok=True)
 
     # 1. Churn overview (target distribution)
     if "is_churned" in customers_df.columns:
@@ -157,7 +169,7 @@ def generate_all_eda_charts(
         ax.set_title("Target Variable Distribution (Churn = 365+ days inactive)")
         ax.set_xlabel("Churned (0=Active, 1=Churned)")
         ax.set_ylabel("Count")
-        save_fig(fig, os.path.join(save_dir, "churn_overview.png"))
+        save_fig(fig, save_dir / "churn_overview.png")
 
     # 2. Monthly revenue & profit trend
     orders_df = orders_df.copy()
@@ -179,7 +191,7 @@ def generate_all_eda_charts(
         plt.xticks(rotation=45)
         plt.title("Monthly Revenue & Profit Trend")
         plt.tight_layout()
-        save_fig(fig, os.path.join(save_dir, "revenue_profit_trend.png"))
+        save_fig(fig, save_dir / "revenue_profit_trend.png")
 
     # 3. Sub-category P&L
     if "Sub-Category" in preprocessed_df.columns and "Sales" in preprocessed_df.columns:
@@ -199,7 +211,7 @@ def generate_all_eda_charts(
         ax.legend()
         ax.set_title("Sub-Category P&L (Sales vs Profit)")
         plt.tight_layout()
-        save_fig(fig, os.path.join(save_dir, "subcategory_pl.png"))
+        save_fig(fig, save_dir / "subcategory_pl.png")
 
     # 4. Discount vs Profit scatter
     if "Discount" in preprocessed_df.columns and "Profit" in preprocessed_df.columns:
@@ -211,7 +223,7 @@ def generate_all_eda_charts(
         ax.set_ylabel("Profit ($)")
         ax.set_title("Discount vs Profit (transaction-level)")
         plt.tight_layout()
-        save_fig(fig, os.path.join(save_dir, "discount_vs_profit.png"))
+        save_fig(fig, save_dir / "discount_vs_profit.png")
 
     # 5. Discount band analysis (PRD Section 4)
     try:
@@ -222,13 +234,15 @@ def generate_all_eda_charts(
         band_metrics = discount_band_metrics(preprocessed_df, discount_col="Discount")
         plot_discount_band_analysis(
             band_metrics, value_col="avg_profit",
-            save_path=os.path.join(save_dir, "discount_band_analysis.png"),
+            save_path=save_dir / "discount_band_analysis.png",
         )
     except Exception:
         pass
 
     # 6. Correlation matrix (customer-level numeric features)
     numeric = customers_df.select_dtypes(include=[np.number])
+    if "recency_days" in numeric.columns:
+        numeric = numeric.drop(columns=["recency_days"])
     if len(numeric.columns) > 1:
         # Drop target for clearer correlation with features only if desired; here we keep it
         fig, ax = plt.subplots(figsize=(10, 8))
@@ -236,7 +250,7 @@ def generate_all_eda_charts(
         sns.heatmap(corr, cmap="coolwarm", center=0, ax=ax, fmt=".2f")
         ax.set_title("Customer-Level Feature Correlation")
         plt.tight_layout()
-        save_fig(fig, os.path.join(save_dir, "correlation_matrix.png"))
+        save_fig(fig, save_dir / "correlation_matrix.png")
 
     # 7. Regional profitability
     if "Region" in preprocessed_df.columns and "Sales" in preprocessed_df.columns:
@@ -254,7 +268,7 @@ def generate_all_eda_charts(
         ax.set_ylabel("Profit Margin (%)")
         ax.set_title("Profit Margin by Region")
         plt.tight_layout()
-        save_fig(fig, os.path.join(save_dir, "region_profitability.png"))
+        save_fig(fig, save_dir / "region_profitability.png")
 
     # 8. Segment profitability
     if "Segment" in preprocessed_df.columns and "Sales" in preprocessed_df.columns:
@@ -272,7 +286,7 @@ def generate_all_eda_charts(
         ax.set_ylabel("Profit Margin (%)")
         ax.set_title("Profit Margin by Segment")
         plt.tight_layout()
-        save_fig(fig, os.path.join(save_dir, "segment_profitability.png"))
+        save_fig(fig, save_dir / "segment_profitability.png")
 
     # 9. Profit impact summary (placeholder for estimated savings)
     total_profit = preprocessed_df["Profit"].sum()
@@ -284,6 +298,6 @@ def generate_all_eda_charts(
         ha="center", va="center", fontsize=16, color="forestgreen", weight="bold",
     )
     ax.axis("off")
-    save_fig(fig, os.path.join(save_dir, "profit_impact_summary.png"))
+    save_fig(fig, save_dir / "profit_impact_summary.png")
 
     print(f"EDA charts saved to {save_dir}")

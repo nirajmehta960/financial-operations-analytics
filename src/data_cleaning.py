@@ -1,32 +1,49 @@
 """
-Cleaning pipeline for U.S. Superstore dataset.
-Phase 2: parse dates, drop Row ID/Country, remove exact duplicates, validate ranges.
+Phase 2 data cleaning for U.S. Superstore.
+
+Pipeline goals:
+- Parse date columns to datetime
+- Drop unused columns
+- Remove exact duplicate rows
+- Enforce basic numeric validity checks
 """
 
-import os
+from pathlib import Path
 import pandas as pd
-import numpy as np
 
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DEFAULT_RAW_PATH = os.path.join(_PROJECT_ROOT, "data", "raw", "superstore.csv")
-DEFAULT_PREPROCESSED_PATH = os.path.join(_PROJECT_ROOT, "data", "preprocessed", "superstore_preprocessed.csv")
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_RAW_PATH = _PROJECT_ROOT / "data" / "raw" / "superstore.csv"
+DEFAULT_PREPROCESSED_PATH = _PROJECT_ROOT / "data" / "preprocessed" / "superstore_preprocessed.csv"
 
 
 def load_raw(data_path: str = None, encoding: str = None) -> pd.DataFrame:
-    """Load raw Superstore CSV. Uses latin-1 to handle non-breaking spaces (0xa0) in Product Name."""
-    path = data_path or DEFAULT_RAW_PATH
+    """Load raw CSV into a DataFrame.
+
+    Defaults:
+    - data_path: data/raw/superstore.csv
+    - encoding: latin-1 (handles special byte characters such as 0xa0)
+    """
+    path = Path(data_path) if data_path else DEFAULT_RAW_PATH
     enc = encoding or "latin-1"
     return pd.read_csv(path, encoding=enc)
 
 
 def drop_unused_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Drop Row ID and Country (constant). Keep Customer Name for optional lookup."""
+    """Drop columns not needed for downstream analysis.
+
+    Drops (if present):
+    - Row ID
+    - Country
+    """
     drop_cols = ["Row ID", "Country"]
     return df.drop(columns=[c for c in drop_cols if c in df.columns])
 
 
 def parse_dates(df: pd.DataFrame) -> pd.DataFrame:
-    """Parse Order Date and Ship Date to datetime."""
+    """Parse Order Date and Ship Date to datetime values.
+
+    Invalid date values are coerced to NaT.
+    """
     for col in ["Order Date", "Ship Date"]:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], format="mixed", errors="coerce")
@@ -34,8 +51,18 @@ def parse_dates(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def drop_duplicates(df: pd.DataFrame) -> pd.DataFrame:
-    """Remove exact duplicate rows. Per BRD: ~17 duplicates expected."""
+    """
+    Remove exact duplicate rows only.
+
+    Why not dedupe by primary/composite keys here:
+    - This transactional dataset does not expose a guaranteed row-level primary key.
+    - Order ID repeats across line items, and Product ID behaves like a coded grouping field,
+      so key-based dedupe can remove valid records.
+    - Full-row dedupe is safer at this stage because it removes only true accidental copies
+      where every column value is identical.
+    """
     n_before = len(df)
+    # No subset: compare all columns and drop only exact row copies.
     df = df.drop_duplicates()
     n_after = len(df)
     if n_before > n_after:
@@ -44,7 +71,15 @@ def drop_duplicates(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def validate_ranges(df: pd.DataFrame) -> pd.DataFrame:
-    """Basic validation: ensure Sales >= 0, Quantity > 0, Discount in [0, 1]. No row drop for negative Profit (real losses)."""
+    """Apply basic range validation filters.
+
+    Rules:
+    - Sales >= 0
+    - Quantity > 0
+    - Discount in [0, 1]
+
+    Note: Negative Profit is allowed (real business losses).
+    """
     if "Sales" in df.columns:
         df = df[df["Sales"] >= 0]
     if "Quantity" in df.columns:
@@ -59,11 +94,18 @@ def run_cleaning_pipeline(
     save_path: str = None,
 ) -> pd.DataFrame:
     """
-    Run full Phase 2 cleaning pipeline.
+    Run the full Phase 2 cleaning pipeline and save cleaned data.
+
     Uses default paths when arguments are None.
+
+    Output file:
+    - data/preprocessed/superstore_preprocessed.csv
+
+    Returns:
+    - Cleaned DataFrame (same columns as input minus dropped columns, with parsed dates)
     """
-    data_path = data_path or DEFAULT_RAW_PATH
-    save_path = save_path or DEFAULT_PREPROCESSED_PATH
+    data_path = Path(data_path) if data_path else DEFAULT_RAW_PATH
+    save_path = Path(save_path) if save_path else DEFAULT_PREPROCESSED_PATH
 
     df = load_raw(data_path)
     print(f"Started with: {len(df):,} rows")
@@ -75,7 +117,7 @@ def run_cleaning_pipeline(
 
     print(f"Final preprocessed rows: {len(df):,}")
 
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    save_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(save_path, index=False)
     return df
 

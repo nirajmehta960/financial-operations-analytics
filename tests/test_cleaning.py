@@ -1,12 +1,12 @@
 """Tests for data_cleaning module."""
-import os
+from pathlib import Path
 import sys
 import pandas as pd
 import pytest
 
-# Project root
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT)
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
 from src.data_cleaning import (
     drop_unused_columns,
@@ -46,7 +46,7 @@ def test_parse_dates(sample_df):
 
 
 def test_drop_duplicates(sample_df):
-    # Add exact duplicate
+    # Add one exact duplicate and verify it is removed.
     dup = sample_df.iloc[0:1]
     df2 = pd.concat([sample_df, dup], ignore_index=True)
     out = drop_duplicates(df2)

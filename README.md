@@ -126,6 +126,9 @@ financial-operations-analytics/
 │   ├── preprocessed/                 # Cleaned transaction-level data
 │   └── featured/                    # Order-level, customer-level, model_ready.csv
 │
+├── docs/
+│   └── data_dictionary.md           # Dataset documentation and column definitions
+│
 ├── sql/
 │   ├── 01_data_profiling.sql
 │   └── 02_revenue_profitability_churn.sql
@@ -257,10 +260,10 @@ python -m pytest tests/ -v
 
 **Superstore Sales Dataset** — Kaggle / Tableau sample data
 
-- ~9,994 transaction line items | 21 columns | Jan 2014 – Dec 2017  
+- 9,993 transaction line items (after cleaning) | 21 columns | Jan 2014 – Dec 2017  
 - 793 unique customers | 5,009 unique orders | 4 regions, 50 states  
 - **Profit** per transaction is included — essential for financial operations analysis.  
-- [Kaggle dataset](https://www.kaggle.com/datasets/vivek468/superstore-dataset-final)
+- [Kaggle dataset](https://www.kaggle.com/datasets/vivek468/superstore-dataset-final) | [Data Dictionary](docs/data_dictionary.md)
 
 ---
 

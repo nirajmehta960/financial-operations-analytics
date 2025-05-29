@@ -1,9 +1,19 @@
 """
-Churn prediction: Logistic Regression, Random Forest, Gradient Boosting.
-Train/test split, scaling for LR, AUC-ROC evaluation, save best model and scaler.
+Phase 4 modeling for churn prediction.
+
+Models trained:
+- Logistic Regression
+- Random Forest
+- Gradient Boosting
+
+Pipeline steps:
+- train/test split
+- scaling (for Logistic Regression)
+- evaluation (AUC-ROC, Recall, Precision, F1)
+- save best model and scaler
 """
 
-import os
+from pathlib import Path
 import joblib
 import pandas as pd
 import numpy as np
@@ -14,17 +24,14 @@ from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.utils.class_weight import compute_sample_weight
 from sklearn.metrics import (
     roc_auc_score,
-    classification_report,
-    confusion_matrix,
-    RocCurveDisplay,
     recall_score,
     precision_score,
     f1_score,
 )
 
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DEFAULT_MODEL_READY_PATH = os.path.join(_PROJECT_ROOT, "data", "featured", "model_ready.csv")
-DEFAULT_MODEL_DIR = os.path.join(_PROJECT_ROOT, "model")
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_MODEL_READY_PATH = _PROJECT_ROOT / "data" / "featured" / "model_ready.csv"
+DEFAULT_MODEL_DIR = _PROJECT_ROOT / "model"
 TARGET_COL = "is_churned"
 
 
@@ -34,7 +41,7 @@ def prepare_train_test(
     test_size: float = 0.2,
     random_state: int = 42,
 ):
-    """Split into X, y and train/test with stratification."""
+    """Split DataFrame into features/target, then stratified train/test sets."""
     X = df.drop(columns=[target_col])
     y = df[target_col]
     return train_test_split(X, y, test_size=test_size, random_state=random_state, stratify=y)
@@ -46,7 +53,7 @@ def get_numeric_columns(X: pd.DataFrame) -> list:
 
 
 def scale_numeric(X_train: pd.DataFrame, X_test: pd.DataFrame, numeric_cols: list = None):
-    """StandardScaler fit on train, transform train and test."""
+    """Scale numeric columns using StandardScaler fit on training data only."""
     numeric_cols = numeric_cols or get_numeric_columns(X_train)
     scaler = StandardScaler()
     X_train_scaled = X_train.copy()
@@ -58,7 +65,7 @@ def scale_numeric(X_train: pd.DataFrame, X_test: pd.DataFrame, numeric_cols: lis
 
 
 def get_default_models():
-    """Return dict of name -> sklearn model instance."""
+    """Return default model dictionary: {model_name: sklearn_estimator}."""
     return {
         "Logistic Regression": LogisticRegression(
             max_iter=1000, class_weight="balanced", random_state=42
@@ -76,7 +83,11 @@ def get_default_models():
 
 def train_and_evaluate(models, X_train, X_test, y_train, y_test,
                       X_train_scaled=None, X_test_scaled=None):
-    """Train each model; use scaled features for LR. Return results dict with y_pred, y_proba."""
+    """Train each model and compute evaluation metrics.
+
+    Logistic Regression uses scaled inputs when provided.
+    Returns a results dictionary containing metrics and predictions.
+    """
     results = {}
     for name, model in models.items():
         if name == "Logistic Regression" and X_train_scaled is not None:
@@ -108,7 +119,7 @@ def get_best_model_name(results: dict, metric: str = "AUC-ROC"):
 
 
 def get_feature_importances(model, feature_names) -> pd.Series:
-    """Feature importances for tree-based models."""
+    """Return sorted feature importance series for tree-based models."""
     return pd.Series(model.feature_importances_, index=feature_names).sort_values(ascending=False)
 
 
@@ -117,10 +128,21 @@ def run_training_pipeline(
     model_dir: str = None,
     save_all_models: bool = False,
 ):
-    """Load model_ready.csv, train all models, save best model and scaler to model/."""
-    data_path = data_path or DEFAULT_MODEL_READY_PATH
-    model_dir = model_dir or DEFAULT_MODEL_DIR
-    os.makedirs(model_dir, exist_ok=True)
+    """Run full training pipeline from model-ready features.
+
+    Saves artifacts to model directory:
+    - best_model.pkl
+    - scaler.pkl
+    - optional: all model pickle files when save_all_models=True
+
+    Returns:
+    - results dict
+    - best model object
+    - fitted scaler
+    """
+    data_path = Path(data_path) if data_path else DEFAULT_MODEL_READY_PATH
+    model_dir = Path(model_dir) if model_dir else DEFAULT_MODEL_DIR
+    model_dir.mkdir(parents=True, exist_ok=True)
 
     df = pd.read_csv(data_path)
     X_train, X_test, y_train, y_test = prepare_train_test(df)
@@ -134,8 +156,8 @@ def run_training_pipeline(
     best_name = get_best_model_name(results)
     best_model = models[best_name]
 
-    best_path = os.path.join(model_dir, "best_model.pkl")
-    scaler_path = os.path.join(model_dir, "scaler.pkl")
+    best_path = model_dir / "best_model.pkl"
+    scaler_path = model_dir / "scaler.pkl"
     joblib.dump(best_model, best_path)
     joblib.dump(scaler, scaler_path)
     print(f"Best model ({best_name}) saved to {best_path}")
@@ -144,7 +166,7 @@ def run_training_pipeline(
     if save_all_models:
         for name, model in models.items():
             safe_name = name.lower().replace(" ", "_") + ".pkl"
-            path = os.path.join(model_dir, safe_name)
+            path = model_dir / safe_name
             joblib.dump(model, path)
             print(f"Saved {name} to {path}")
 
@@ -153,23 +175,23 @@ def run_training_pipeline(
 
 if __name__ == "__main__":
     import sys
-    if _PROJECT_ROOT not in sys.path:
-        sys.path.insert(0, _PROJECT_ROOT)
+    if str(_PROJECT_ROOT) not in sys.path:
+        sys.path.insert(0, str(_PROJECT_ROOT))
     results, best_model, scaler = run_training_pipeline(save_all_models=True)
     print("Training complete. Artifacts in model/")
 
     # Save model evaluation charts to images/eda_charts
-    images_dir = os.path.join(_PROJECT_ROOT, "images", "eda_charts")
-    os.makedirs(images_dir, exist_ok=True)
+    images_dir = _PROJECT_ROOT / "images" / "eda_charts"
+    images_dir.mkdir(parents=True, exist_ok=True)
     df = pd.read_csv(DEFAULT_MODEL_READY_PATH)
     X_train, X_test, y_train, y_test = prepare_train_test(df)
     try:
         from src.visualizations import plot_roc_curves, plot_confusion_matrices, plot_feature_importance
-        plot_roc_curves(results, y_test, save_path=os.path.join(images_dir, "roc_comparison.png"))
-        plot_confusion_matrices(results, y_test, save_path=os.path.join(images_dir, "confusion_matrices.png"))
+        plot_roc_curves(results, y_test, save_path=images_dir / "roc_comparison.png")
+        plot_confusion_matrices(results, y_test, save_path=images_dir / "confusion_matrices.png")
         if hasattr(best_model, "feature_importances_"):
             imp = get_feature_importances(best_model, X_train.columns)
-            plot_feature_importance(imp, save_path=os.path.join(images_dir, "feature_importance.png"))
+            plot_feature_importance(imp, save_path=images_dir / "feature_importance.png")
         print(f"Model charts saved to {images_dir}")
     except Exception as e:
         print(f"Could not save model charts: {e}")
