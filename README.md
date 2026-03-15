@@ -96,6 +96,27 @@ Top churn predictors from the best tree-based model (e.g. order count, category 
 
 ---
 
+## Interactive Dashboard (Power BI)
+
+Five-page executive dashboard built in Power BI Service with star-schema data model (fact + dimension tables) and DAX measures.
+
+### Page 1: Financial KPI Overview
+![KPI Overview](images/dashboard/01_financial_kpi_overview.png)
+
+### Page 2: Profitability Deep Dive
+![Profitability](images/dashboard/02_profitability_deep_dive.png)
+
+### Page 3: Regional & Segment Performance
+![Regional](images/dashboard/03_regional_segment_performance.png)
+
+### Page 4: Customer Retention & Churn
+![Churn](images/dashboard/04_customer_retention_churn.png)
+
+### Page 5: Executive Recommendations
+![Recommendations](images/dashboard/05_executive_recommendations.png)
+
+---
+
 ## Business Recommendations
 
 | #   | Action                                                | Expected Impact                    |
@@ -172,7 +193,7 @@ financial-operations-analytics/
     │   ├── roc_comparison.png
     │   ├── confusion_matrices.png
     │   └── feature_importance.png
-    └── tableau/                      # (Optional) Tableau/Power BI dashboard screenshots
+    └── dashboard/                    # Power BI dashboard screenshots
 ```
 
 ---
@@ -252,7 +273,7 @@ python -m pytest tests/ -v
 ### 8. Images and reports
 
 - **Charts:** EDA and model charts are under **images/eda_charts/** after running notebooks **04_eda** and **07_churn_prediction** (or `modeling.py`).
-- **Dashboard:** Build the 5-page Tableau/Power BI dashboard per BRD and add screenshots under **images/tableau/** if desired.
+- **Dashboard:** View the 5-page Interactive Power BI dashboard screenshots under **images/dashboard/**.
 
 ---
 
