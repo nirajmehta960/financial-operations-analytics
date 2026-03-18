@@ -29,7 +29,7 @@ from sklearn.metrics import (
     f1_score,
 )
 
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MODEL_READY_PATH = _PROJECT_ROOT / "data" / "featured" / "model_ready.csv"
 DEFAULT_MODEL_DIR = _PROJECT_ROOT / "model"
 TARGET_COL = "is_churned"
@@ -186,7 +186,7 @@ if __name__ == "__main__":
     df = pd.read_csv(DEFAULT_MODEL_READY_PATH)
     X_train, X_test, y_train, y_test = prepare_train_test(df)
     try:
-        from src.visualizations import plot_roc_curves, plot_confusion_matrices, plot_feature_importance
+        from src.python_pipeline.visualizations import plot_roc_curves, plot_confusion_matrices, plot_feature_importance
         plot_roc_curves(results, y_test, save_path=images_dir / "roc_comparison.png")
         plot_confusion_matrices(results, y_test, save_path=images_dir / "confusion_matrices.png")
         if hasattr(best_model, "feature_importances_"):

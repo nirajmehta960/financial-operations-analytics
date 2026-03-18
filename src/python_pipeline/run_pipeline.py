@@ -1,20 +1,19 @@
 """
-Orchestrator for the end-to-end data pipeline.
+Run the Python ETL pipeline (Phase 2 cleaning + Phase 3 feature engineering).
 
-Execution order:
-1) Phase 2 cleaning
-2) Phase 3 feature engineering
+This is a thin wrapper around the existing modules in `src/` to match the
+`src/python_pipeline/` project structure used in the diabetes reference repo.
 """
 
 import sys
 from pathlib import Path
 
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from src.data_cleaning import run_cleaning_pipeline, DEFAULT_PREPROCESSED_PATH
-from src.feature_engineering import (
+from src.python_pipeline.data_cleaning import run_cleaning_pipeline, DEFAULT_PREPROCESSED_PATH  # noqa: E402
+from src.python_pipeline.feature_engineering import (  # noqa: E402
     run_feature_engineering_pipeline,
     DEFAULT_ORDERS_PATH,
     DEFAULT_CUSTOMERS_PATH,
@@ -29,16 +28,6 @@ def run_pipeline(
     customers_path: str = None,
     model_ready_path: str = None,
 ):
-    """Run cleaning then feature engineering.
-
-    All path arguments are optional. If omitted, each phase uses its module defaults.
-
-    Output datasets:
-    - preprocessed CSV (Phase 2)
-    - orders CSV (Phase 3)
-    - customers CSV (Phase 3)
-    - model_ready CSV (Phase 3)
-    """
     run_cleaning_pipeline(data_path=raw_path, save_path=preprocessed_path)
     print(f"Phase 2 done: preprocessed -> {preprocessed_path or DEFAULT_PREPROCESSED_PATH}")
 
@@ -55,4 +44,5 @@ def run_pipeline(
 
 if __name__ == "__main__":
     run_pipeline()
-    print("Data pipeline complete.")
+    print("Python pipeline complete.")
+

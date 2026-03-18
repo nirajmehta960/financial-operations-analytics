@@ -227,10 +227,9 @@ def generate_all_eda_charts(
 
     # 5. Discount band analysis (PRD Section 4)
     try:
-        try:
-            from src.feature_engineering import discount_band_metrics
-        except ImportError:
-            from feature_engineering import discount_band_metrics
+        from src.python_pipeline.feature_engineering import discount_band_metrics
+    except ImportError:
+        from src.python_pipeline.feature_engineering import discount_band_metrics
         band_metrics = discount_band_metrics(preprocessed_df, discount_col="Discount")
         plot_discount_band_analysis(
             band_metrics, value_col="avg_profit",

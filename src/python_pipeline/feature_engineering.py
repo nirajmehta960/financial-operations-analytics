@@ -7,7 +7,7 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PREPROCESSED_PATH = _PROJECT_ROOT / "data" / "preprocessed" / "superstore_preprocessed.csv"
 DEFAULT_ORDERS_PATH = _PROJECT_ROOT / "data" / "featured" / "superstore_orders.csv"
 DEFAULT_CUSTOMERS_PATH = _PROJECT_ROOT / "data" / "featured" / "superstore_customers.csv"

@@ -11,7 +11,7 @@ Pipeline goals:
 from pathlib import Path
 import pandas as pd
 
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_RAW_PATH = _PROJECT_ROOT / "data" / "raw" / "superstore.csv"
 DEFAULT_PREPROCESSED_PATH = _PROJECT_ROOT / "data" / "preprocessed" / "superstore_preprocessed.csv"
 
