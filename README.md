@@ -117,6 +117,55 @@ Five-page executive dashboard built in Power BI Service with star-schema data mo
 
 ---
 
+## SQL ETL & Analytics Pipeline
+
+This project includes a production-style **SQL-first ETL pipeline** built in **SQLite** (mirroring the approach used in the diabetes reference project). It loads the raw `superstore.csv` into a SQLite database, transforms it into a curated star-schema-like model, and exposes BI-ready marts.
+
+### 1. Data architecture
+The pipeline follows a tiered architecture:
+- **Raw (`superstore_raw`)**: raw CSV loaded into SQLite (all columns as text).
+- **Staging (`stg_line_items`)**: typed fields, normalized dates, basic validity filters, and derived fields (shipping days, profit margin, month/year/quarter).
+- **Dimensions**: natural-key dimensions derived from staging:
+  - `dim_customer`, `dim_product`, `dim_geo`, `dim_ship_mode`, `dim_segment`
+- **Facts**:
+  - `fct_line_items`: transaction grain
+  - `fct_orders`: one row per order (aggregations similar to Python feature engineering)
+  - `fct_customers`: one row per customer, including churn label (365-day inactivity relative to dataset end date)
+- **Marts (Views)**: consumption-ready analytics views:
+  - `mart_financial_kpis`, `mart_monthly_revenue_profit`, `mart_subcategory_pl`, `mart_discount_band`, `mart_region_segment_profitability`, `mart_churn_kpis`
+
+### 2. How to run the SQL pipeline
+
+**Step A: Place the data**
+- Put `superstore.csv` into `data/raw/` (encoding may be `latin-1`).
+
+**Step B: Run the SQL-first ETL (recommended one-command runner)**
+
+```bash
+python3 -m src.sql_pipeline.run_pipeline
+```
+
+This will:
+1) Load `data/raw/superstore.csv` → SQLite table `superstore_raw`  
+2) Execute all scripts in `sql/etl/` (00 → 50) against `data/superstore.sqlite`
+
+### 3. Python-first Analytics Pipeline
+
+Alternatively, you can run the Python-native pipeline which includes cleaning, feature engineering, and churn modeling logic.
+
+**How to run the Python pipeline:**
+
+```bash
+python3 -m src.python_pipeline.run_pipeline
+```
+
+This will:
+1) Clean raw data → `data/preprocessed/`
+2) Build order & customer features → `data/featured/`
+3) Prepare a target-ready dataset for ML → `data/featured/model_ready.csv`
+
+---
+
 ## Business Recommendations
 
 | #   | Action                                                | Expected Impact                    |
@@ -166,13 +215,19 @@ financial-operations-analytics/
 │
 ├── src/
 │   ├── __init__.py
-│   ├── data_cleaning.py
-│   ├── feature_engineering.py
-│   ├── modeling.py
-│   ├── visualizations.py
-│   ├── forecasting.py
-│   ├── run_data_pipeline.py
-│
+│   ├── python_pipeline/             # Python-native ETL & ML logic
+│   │   ├── __init__.py
+│   │   ├── data_cleaning.py
+│   │   ├── feature_engineering.py
+│   │   ├── forecasting.py           # Revenue/Profit time series
+│   │   ├── modeling.py              # Churn classification
+│   │   ├── visualizations.py        # EDA & Model plots
+│   │   └── run_pipeline.py          # Python E2E Runner
+│   └── sql_pipeline/                # SQL-first ETL (SQLite)
+│       ├── __init__.py
+│       ├── load_raw.py
+│       ├── run_etl.py
+│       └── run_pipeline.py          # SQL E2E Runner
 ├── model/                            # best_model.pkl, scaler.pkl
 ├── tests/
 │   ├── test_cleaning.py
@@ -231,27 +286,22 @@ pip install -r requirements.txt
 
 Place **superstore.csv** in `data/raw/`. Columns expected: Order ID, Order Date, Ship Date, Ship Mode, Customer ID, Segment, Region, State, Category, Sub-Category, Sales, Quantity, Discount, Profit (and others per data dictionary). The CSV may use **latin-1** encoding (non-breaking spaces in Product Name).
 
-### 4. Run the data pipeline
-
-```bash
-python src/run_data_pipeline.py
+python3 -m src.python_pipeline.run_pipeline
 ```
 
 Outputs:  
 `data/preprocessed/superstore_preprocessed.csv`  
 `data/featured/superstore_orders.csv`, `superstore_customers.csv`, `model_ready.csv`
 
-### 5. Run notebooks (in order)
-
-Run **04_eda.ipynb** to generate all EDA charts to **images/eda_charts/**.
-
-### 6. Train the churn model (optional)
+### 5. Train the churn model (optional)
 
 ```bash
-python src/modeling.py
+python3 -m src.python_pipeline.modeling
 ```
 
 Saves **model/best_model.pkl** and **model/scaler.pkl**, and writes ROC, confusion matrices, and feature importance to **images/eda_charts/**.
+
+### 6. Run notebooks (in order)
 
 Run notebooks in order:
 
