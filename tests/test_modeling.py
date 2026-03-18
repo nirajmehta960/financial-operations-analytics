@@ -9,7 +9,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from src.modeling import (
+from src.python_pipeline.modeling import (
     prepare_train_test,
     scale_numeric,
     get_default_models,

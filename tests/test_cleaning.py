@@ -8,7 +8,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from src.data_cleaning import (
+from src.python_pipeline.data_cleaning import (
     drop_unused_columns,
     parse_dates,
     drop_duplicates,

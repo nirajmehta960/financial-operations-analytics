@@ -12,6 +12,13 @@ data/featured/*
 *.pkl
 *.xlsx
 
+# SQLite
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.db
+*.sqlite3
+
 # Python
 __pycache__/
 *.py[cod]
